@@ -1,0 +1,6 @@
+.idea
+*.pyc
+src/log/*
+src/media/*
+src/test/report/*
+src/app/static/et/old/js/*
