@@ -4,3 +4,4 @@ src/log/*
 src/media/*
 src/test/report/*
 src/app/static/et/old/js/*
+/src/id_rsa

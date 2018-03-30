@@ -14,12 +14,10 @@ logger = logging.getLogger('dblog')
 tb_syscfg = collections.OrderedDict()  # 系统配置表
 
 
-
-
 # ------------需要缓存的新表结束-------------------
 def load_admin_data():
     """从数据库中读取配置信息加载到内存 """
-    
+
     def load_data(sql_, dict_, index_str='Id'):
         """执行加载语句
         @param sql_:
@@ -29,17 +27,16 @@ def load_admin_data():
         dict_.clear()
         for item in res:
             dict_[long(item[index_str])] = item
-            
+
     logger.info('加载数据配置数据开始 ...')
     # ----------------加载配置库-----------------
     sql = "SELECT * FROM tb_syscfg order by Id"
     load_data(sql, tb_syscfg)  # 系统配置
-    
-    
+
     # ----------------加载配置库结束---------------
     logger.info('加载数据配置数据完毕 ...')
-    
-    
+
+
 def get_syscfg_val(syscfg_id):
     """
     通过系统配置表的id获取值

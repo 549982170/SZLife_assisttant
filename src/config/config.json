@@ -1,8 +1,8 @@
 {
 	"db": {
-		"host": "127.0.0.1",
+		"host": "localhost",
 		"user": "root",
-		"passwd": "root",
+		"passwd": "@Root123",
 		"port": 3306,
 		"db": "szlife_assistant",
 		"charset": "utf8"
@@ -15,11 +15,10 @@
 	},
 	"redis": {
 		"host": "localhost",
-		"password": "soovii_productionplanning_db@Redis",
-		"port": 6371,
+		"password": "szlife_assistant@Redis",
+		"port": 6370,
 		"db": 0
 	},
-	"secret_key":"F3FAFF979E985A663669BB92B1D8C206957E1A981BAE58886D91664221685307BBFB7FF4A151A16FA5AB4C77C3863E9E7DBA0FD37DF83D573658291F3131AD91",
 	"REMEMBER_COOKIE_NAME":"szlife_assistant",
 	"remember_cookie_day":1,
 	"host": "0.0.0.0",

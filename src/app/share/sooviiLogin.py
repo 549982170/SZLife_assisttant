@@ -15,19 +15,20 @@ from app.db.dbadmin import get_syscfg_val
 from app.share.constants import SOCP, GRANT_TYPE, GRANT_TYPE2
 
 
-logger = logging.getLogger("adminlog") 
+logger = logging.getLogger("adminlog")
+
 
 class mySooviiLogin(object):
     """用户验证类别"""
-    
+
     def __init__(self):
         pass
-    
+
     def init_login(self):
         self.serviceName = get_syscfg_val(15) + ":" + get_syscfg_val(6)   # 平台服务器域名
         self.ClientId = get_syscfg_val(19)      # 平台ID 企业中心提供
         self.ClientSecret = get_syscfg_val(20)  # 平台密码 企业中心提供
-        self.HeaderValue = base64.b64encode((self.ClientId+":"+self.ClientSecret).encode("utf-8"))
+        self.HeaderValue = base64.b64encode((self.ClientId + ":" + self.ClientSecret).encode("utf-8"))
         self.Authorization = "Basic" + " " + self.HeaderValue
         self.scope = SOCP
         self.grant_type = GRANT_TYPE
@@ -38,7 +39,7 @@ class mySooviiLogin(object):
         self.otherloginUrl = self.serviceName + get_syscfg_val(11)  # 获取其他用户登录信息的url
         self.allloginUrl = self.serviceName + get_syscfg_val(4)  # 获取所有用户登录信息的url
         self.resetinfo()
-    
+
     def resetinfo(self):
         """重置信息"""
         self.refresh_token = u""
@@ -67,8 +68,7 @@ class mySooviiLogin(object):
             logger.error(traceback.format_exc())
         finally:
             return self.tokenResult
-        
-    
+
     def refreshToken(self):
         """刷新Token"""
         try:
@@ -77,10 +77,10 @@ class mySooviiLogin(object):
                 return self.tokenResult
             refresh_token = self.tokenResult.get("refresh_token")
             payload = {
-                    "refresh_token": refresh_token,
-                    "scope": self.scope,
-                    "grant_type": self.grant_type2
-                }
+                "refresh_token": refresh_token,
+                "scope": self.scope,
+                "grant_type": self.grant_type2
+            }
             r = requests.post(self.tokenurl, data=payload, headers=self.headers)
             self.tokenResult = r.json()
             self.token = self.tokenResult.get("refresh_token")
@@ -90,8 +90,8 @@ class mySooviiLogin(object):
             logger.error(traceback.format_exc())
         finally:
             return self.tokenResult
-    
-    @property  
+
+    @property
     def loginInfo(self):
         """获取自己的登录信息"""
         try:
@@ -106,7 +106,7 @@ class mySooviiLogin(object):
             logger.error(traceback.format_exc())
         finally:
             return self.loginResult
-      
+
     def otherLoginInfo(self, userId):
         """获取其他用户信息"""
         try:
@@ -121,8 +121,8 @@ class mySooviiLogin(object):
             logger.error(traceback.format_exc())
         finally:
             return self.otherloginResult
-    
-    @property  
+
+    @property
     def allLoginInfo(self):
         """获取所有用户信息"""
         try:
@@ -137,23 +137,22 @@ class mySooviiLogin(object):
             logger.error(traceback.format_exc())
         finally:
             return self.allloginResult
-    
-    
-    
+
+
 class adminSooviiLogin(mySooviiLogin):
     """admin用户验证类别"""
-    
+
     def __init__(self):
         super(adminSooviiLogin, self).__init__()
-    
+
     def init_login(self):
         super(adminSooviiLogin, self).init_login()
         self.adminuser = get_syscfg_val(21)  # 默认admin用户帐号
         self.adminpwd = get_syscfg_val(22)  # 默认admin用户密码
-    
+
     def login(self):
         super(adminSooviiLogin, self).login(self.adminuser, self.adminpwd)
-      
+
     def refreshToken(self):
         """重写基类的刷新Token,使得adminSooviiLogin免登录"""
         try:
@@ -164,10 +163,10 @@ class adminSooviiLogin(mySooviiLogin):
                 return self.tokenResult
             refresh_token = self.tokenResult.get("refresh_token")
             payload = {
-                    "refresh_token": refresh_token,
-                    "scope": self.scope,
-                    "grant_type": self.grant_type2
-                }
+                "refresh_token": refresh_token,
+                "scope": self.scope,
+                "grant_type": self.grant_type2
+            }
             r = requests.post(self.tokenurl, data=payload, headers=self.headers)
             self.tokenResult = r.json()
             self.token = self.tokenResult.get("refresh_token")
@@ -177,7 +176,7 @@ class adminSooviiLogin(mySooviiLogin):
             logger.error(traceback.format_exc())
         finally:
             return self.tokenResult
-    
+
 mysooviilogin = mySooviiLogin()
 
 adminsooviilogin = adminSooviiLogin()

@@ -67,6 +67,7 @@ mysooviilogin.init_login()
 adminsooviilogin.init_login()
 # --------用户登录初始化结束-------
 
+
 @app.before_request
 def before_request():
     """所有请求前执行方法"""
@@ -94,6 +95,7 @@ def register_blueprints(app):
 
 
 register_blueprints(app)
+
 
 @app.errorhandler(CSRFError)
 def handle_csrf_error(e):  # 尚未通过csrf验证
@@ -125,10 +127,9 @@ def load_user(userId):
     urlrootpath = request.path.split("/")[1]
     if urlrootpath == "admin":
         user = adminUser(userId)
-    else: 
+    else:
         user = User(userId)
     return user if user.obj and user.IsDisabled == 0 else None  # 找不到改用户返回空
-
 
 
 def testapp():

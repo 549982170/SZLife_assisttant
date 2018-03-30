@@ -37,6 +37,4 @@ encoding//src/config/config.py=utf-8
 encoding//src/fabfile.py=utf-8
 encoding//src/gunconf.py=utf-8
 encoding//src/synchrodata.py=utf-8
-encoding//src/test/mytest.py=utf-8
-encoding//src/test/test_case/test_login.py=utf-8
 encoding//src/workerhelp.py=utf-8

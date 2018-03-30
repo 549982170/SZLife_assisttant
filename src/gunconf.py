@@ -28,8 +28,8 @@ errorlog = "./log/gunicorn_errorlog.log"                 # 错误日志文件的
 pidfile = "./log/gunicorn.pid"
 
 
-#启动的进程数
-# workers = multiprocessing.cpu_count() * 2 + 1            # 进程数(子进程共享了父进程的文件句柄,多进程共用一个 fd 的情况下使用 logging 模块写少量日志是进程安全的) 
-workers = 4
-threads = 2                                              # 指定每个进程开启的线程数
+# 启动的进程数
+workers = multiprocessing.cpu_count() * 2 + 1            # 进程数(子进程共享了父进程的文件句柄,多进程共用一个 fd 的情况下使用 logging 模块写少量日志是进程安全的)
+# workers = 4
+# threads = 2                                              # 指定每个进程开启的线程数
 backlog = 512                                            # 监听队列

@@ -5,10 +5,10 @@ Created on 2017年3月1日
 @author: yizhiwu
 '''
 import logging
-import traceback 
+import traceback
 
 from random import choice
-from flask  import redirect, Blueprint, render_template, request, current_app, url_for
+from flask import redirect, Blueprint, render_template, request, current_app, url_for
 from flask_login import current_user, login_user
 from app.db import memmode
 from app.db.dbadmin import get_syscfg_val
@@ -27,6 +27,7 @@ mod = Blueprint('index', __name__, static_folder=defaultStaticFolder, template_f
 #     if not current_user.is_authenticated:
 #         return current_app.login_manager.unauthorized()  # 没有认证返回登录页
 
+
 @mod.route('/')
 def index():
     try:
@@ -36,6 +37,3 @@ def index():
     except:
         logger.error(traceback.format_exc())
         return redirect(url_for("user.login"))
-
-
-
