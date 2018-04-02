@@ -109,9 +109,10 @@ def handle_csrf_error(e):  # 尚未通过csrf验证
         logger.exception(e)
         return json.dumps({'status': 0, 'result': 0, "data": e.description, "msg": u"服务器异常"})
 
-# @app.errorhandler(404)
-# def page_not_found(error):
-#     return render_template('404.html')
+
+@app.errorhandler(404)
+def page_not_found(error):
+    return render_template('404.html')
 
 
 @app.teardown_request

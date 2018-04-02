@@ -1,5 +1,5 @@
 # coding:utf-8
-#!/user/bin/python
+# !/user/bin/python
 '''
 Created on 2017年3月2日
 @author: yizhiwu
@@ -10,7 +10,8 @@ sys.setdefaultencoding('utf-8')
 link https://my.oschina.net/yves175/blog/849704
 '''
 import sys
-defaultencoding = 'utf-8'
-if sys.getdefaultencoding() != defaultencoding:
+from app.share.constants import DEFAULT_ENCODING
+
+if sys.getdefaultencoding() != DEFAULT_ENCODING:
     reload(sys)
-    sys.setdefaultencoding(defaultencoding)
+    sys.setdefaultencoding(DEFAULT_ENCODING)
