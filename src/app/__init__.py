@@ -1,5 +1,5 @@
 # coding:utf-8
-# !/user/bin/python
+#!/user/bin/python
 '''
 Created on 2017年3月2日
 @author: yizhiwu
