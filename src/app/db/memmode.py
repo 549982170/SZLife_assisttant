@@ -9,6 +9,10 @@ from dbentrust.madminanager import MAdminManager
 from dbentrust.mmode import MAdmin
 
 # ---------------添加的内存库表----------------
-ac_users = MAdmin('ac_users', 'Id', fk='AccountId')  # 用户表
-ac_users.insert()
-MAdminManager().registe(ac_users)
+tb_users = MAdmin('tb_users', 'id', fk='')  # 用户表
+tb_users.insert()
+MAdminManager().registe(tb_users)
+
+tb_admin_users = MAdmin('tb_admin_users', 'id', fk='')  # 用户表
+tb_admin_users.insert()
+MAdminManager().registe(tb_admin_users)

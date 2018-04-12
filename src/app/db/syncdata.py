@@ -13,6 +13,7 @@ from app.share.constants import SECONDS
 logger = logging.getLogger('dblog')  # 数据库操作日志,logging是多线程安全的
 rankTimer = None
 
+
 def timerGetData(Time=-1):
     """定时扫描mencache到mysql"""
     try:
@@ -41,7 +42,7 @@ def timerGetData(Time=-1):
                 try:
                     tarObj.syncDB()
                 except Exception as ex:
-                    logger.error("SyncData error,tableName=%s, pkID=%s, keyName=%s, data=%s,state=%d" \
+                    logger.error("SyncData error,tableName=%s, pkID=%s, keyName=%s, data=%s,state=%d"
                                  % (tableName, keyIdValue, keyName, tarObj.get('data'), tarObj.get('_state')))
                     logger.error(traceback.format_exc())
                     logger.error(ex)
@@ -60,13 +61,12 @@ def timerGetData(Time=-1):
     finally:
         global rankTimer
         logger.info('SyncDataToDB end...')
-        if Time ==-1:  # 循环执行
+        if Time == -1:  # 循环执行
             rankTimer = Timer(SECONDS, timerGetData)  # 1秒
             rankTimer.start()
 
-    
+
 def stopRankTimer():
     """停止线程"""
     if rankTimer:
         rankTimer.cancel()
-        

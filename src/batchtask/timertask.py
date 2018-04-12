@@ -8,14 +8,10 @@ Created on 2017年7月10日
 import datetime
 import json
 import logging
-import os
-import shutil
 import socket
-from time import strftime, localtime
 import time
 import traceback
 
-from util import getCompareDateByStr, smartToChangeCode
 from dbentrust.dbpool import dbpool
 from dbentrust.madminanager import MAdminManager
 from dbentrust.memclient import mclient
@@ -25,7 +21,7 @@ socket.setdefaulttimeout(10)  # 限制http超时时间(秒)
 # ----------日志操作----------
 logger = logging.getLogger()  # 获取dblog的日志配置
 # ----------全局参数----------
-TB_SYSCFG = {}
+CF_SYSCFG = {}
 # ----------数据库连接----------
 configfiles = json.load(open('../config/config.json', 'r'))
 dbpool.initPool(configfiles['db'])  # 独立日志的dbpool连接
@@ -35,6 +31,8 @@ hostname = configfiles['memcached']['hostname']
 mclient.connect(urls, hostname)
 # -------连接后注册内存对象 ------
 # -------------------------------处理任务逻辑-----------------------------------------
+
+
 def fun_1000(task):
     """剧本删除清理"""
     try:
@@ -48,20 +46,19 @@ def fun_1000(task):
                 sql = "update tb_batchtask set taskdate=%s,status=0 where id=1000" % (Intdate)
                 dbpool.execSql(sql)
             return
-        
-        
-        
+
         sql = "update tb_batchtask set taskdate=%s,status=1 where id=1000" % (Intdate)
         dbpool.execSql(sql)
         logger.info("%s %s完成" % (Intdate, task['taskname']))
-    except Exception as ex:
+    except Exception as _ex:
         logger.error("%s %s异常" % (Intdate, task['taskname']))
         logger.error(traceback.format_exc())
         sql = "update tb_batchtask set taskdate=%s,status=2 where id=1000" % (Intdate)
         dbpool.execSql(sql)
 
+
 def fun_1001(task):
-    """文件清理"""    
+    """文件清理"""
     try:
         curdatetime = task['curdatetime']
         Intdate = task['Intdate']
@@ -73,13 +70,11 @@ def fun_1001(task):
                 sql = "update tb_batchtask set taskdate=%s,status=0 where id=1001" % (Intdate)
                 dbpool.execSql(sql)
             return
-        
-       
-        
+
         sql = "update tb_batchtask set taskdate=%s,status=1 where id=1001" % (Intdate)
         dbpool.execSql(sql)
         logger.info("%s %s完成" % (Intdate, task['taskname']))
-    except Exception as ex:
+    except Exception as _ex:
         logger.error("%s %s异常" % (Intdate, task['taskname']))
         logger.error(traceback.format_exc())
         sql = "update tb_batchtask set taskdate=%s,status=2 where id=1001" % (Intdate)
@@ -89,13 +84,13 @@ def fun_1001(task):
 if __name__ == '__main__':
     logger.info('批量任务后台程序启动....')
     # --------------重新加载配置 --------------
-    TB_SYSCFG.clear()
-    queryResult = dbpool.querySql("select * from tb_syscfg", True)
+    CF_SYSCFG.clear()
+    queryResult = dbpool.querySql("select * from cf_syscfg", True)
     for ca in queryResult:
-        TB_SYSCFG[ca['Id']] = ca['content']
+        CF_SYSCFG[ca['Id']] = ca['content']
 
     while True:
-        try:        
+        try:
             # 执行日期
             curdatetime = datetime.datetime.now()
             Intdate = int(curdatetime.strftime("%Y%m%d"))
@@ -105,7 +100,7 @@ if __name__ == '__main__':
             for task in queryResult:
                 task['curdatetime'] = curdatetime  # 现在的时间对象
                 task['Intdate'] = Intdate  # 现在的时间日期
-                task['taskdatetime'] = datetime.datetime.strptime(str("%s %s" % (task['taskdate'], task['starttime'])),'%Y%m%d %H:%M') # 字符串转日期
+                task['taskdatetime'] = datetime.datetime.strptime(str("%s %s" % (task['taskdate'], task['starttime'])), '%Y%m%d %H:%M')  # 字符串转日期
                 if task['id'] == 1000:  # 每日22：00 清理剧本删除后的相关数据
                     fun_1000(task)
                 if task['id'] == 1001:  # 每日23：00 清理不存在的图片文件
@@ -115,4 +110,3 @@ if __name__ == '__main__':
             logger.error(traceback.format_exc())
         finally:
             time.sleep(10)
-                    

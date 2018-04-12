@@ -26,15 +26,14 @@ CharacterEffectsType = 2                                                # 角色
 CGEffectsType = 1                                                       # CG特效类型
 EffectEtypeId = collections.OrderedDict([('cj', 3), ('js', 2), ('cg', 1), ('dj', 5), ('fx', 21), ('hz', 17), ('fz', 33), ('wx', 43), ('tj', 44), ('jiaotong', 37), ('dw', 45)])  # 特效类型
 WkhtmltopdfPath = "D:\\wkhtmltopdf\\bin\\wkhtmltopdf.exe"               # windows系统PDF下载软件wkhtmltopdf软件路径
-STATUS_EDIT = 1                                                        # 剧本状态编辑状态
-STATUS_STANDARDIZATION = 1                                              # 剧本状态标准化状态
-STATUS_SPLIT = 2                                                        # 剧本状态拆分状态
+WkhtmltoimgPath = "D:\\wkhtmltopdf\\bin\\wkhtmltoimage.exe"             # windows系统IMG下载软件wkhtmltoimage软件路径
+COMPRESSIONPICTURE = "_thumb"                                           # 压缩图片的后缀
+PICTURETYPE = ["jpg", "png", "bmp", "jpeg", 'gif']                      # 图片类型
+ALLOWED_EXTENPICSIONS = [".jpg", ".png", ".bmp", ".jpeg"]               # 上传图片的限制格式
+DOWNLOAD_FOLDER = os.path.join('media', 'download')                     # 下载的文件路径
 SOCP = "common"                                                         # 登录请求socp
 GRANT_TYPE = "password"                                                 # 登录请求grant_type
 GRANT_TYPE2 = "refresh_token"                                           # 刷新token请求grant_type
-ALLOWED_EXTENPICSIONS = [".jpg", ".png", ".bmp", ".jpeg"]                # 上传图片的限制格式
-ACTORFPATH = "actor"                                                    # 演员图片文件夹
-
 
 # ---------------END-----------------------------------
 config.fileConfig(logFilePath)  # 配置日志

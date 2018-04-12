@@ -1,5 +1,5 @@
 # coding:utf-8
-#!/user/bin/python
+# !/user/bin/python
 '''
 Created on 2017年2月8日
 @author: yizhiwu
@@ -8,18 +8,24 @@ Created on 2017年2月8日
 from collections import defaultdict
 import collections
 import datetime
+from decimal import Decimal
+from decimal import getcontext
 from functools import wraps
 import hashlib
+import imghdr
 from itertools import groupby
 import json
 import logging
 from operator import itemgetter
 import os
+import pickle
 import platform
 import re
 import subprocess
 import tempfile
+import threading
 from time import strftime, localtime, gmtime
+import time
 import traceback
 import unicodedata
 import urllib
@@ -31,28 +37,81 @@ from bs4 import BeautifulSoup
 from docx import Document
 from flask import url_for, request
 from flask_login import current_user, login_required
+import imgkit
+import pdfkit
+from reportlab.pdfgen import canvas
 import requests
 from werkzeug._compat import text_type, PY2
 
+from app.share.caheFiles import CACHE
+from app.share.constants import WkhtmltopdfPath, WkhtmltoimgPath, COMPRESSIONPICTURE, PICTURETYPE, ALLOWED_EXTENPICSIONS,\
+    DOWNLOAD_FOLDER
 import constants
+from myThread import MyThread, LOCK_DICT
 
 
 configfiles = json.load(open(constants.configFilePath, 'r'))
 logger = logging.getLogger()
 
 
-def memotool(fun):
+def is_obsolete(entry, duration):
+    d = time.time() - entry['time']
+    return d > duration
+
+
+def compute_key(function, args=None, kwargs=None):
+    key = pickle.dumps((function.func_name, args, kwargs))
+    return hashlib.sha1(key).hexdigest()
+
+
+def memotool(duration=10):
     """函数缓存装饰器"""
-    cache = {}
+    def _memorize(function):
+        @wraps(function)
+        def __memorize(*args, **kwargs):
+            key = compute_key(function, args, kwargs)
+            if key in CACHE and not is_obsolete(CACHE[key], duration):
+                CACHE[key]['time'] = time.time()  # 更新缓存时间
+                return CACHE[key]['value']
+            result = function(*args, **kwargs)
+            CACHE[key] = {'value': result, 'time': time.time()}
+            return result
+        return __memorize
+    return _memorize
 
-    @wraps(fun)
-    def wrap(*arg, **kwargs):
-        key = str(arg) + str(kwargs)
-        if key not in cache:
-            cache[key] = fun(*arg, **kwargs)
-        return cache[key]
 
-    return wrap
+def thread_lock(function):
+    """多线程路由函数独立锁（函数名+函数结点作为唯一识别,保证函数线程安全）"""
+    @wraps(function)
+    def run(*args, **kwargs):
+        try:
+            sign = request.url if hasattr(request, "endpoint") else None
+            key = hashlib.sha1(pickle.dumps((function.func_name, sign))).hexdigest()
+            lock = LOCK_DICT.get(key)
+            if not lock:
+                lock = threading.RLock()
+                LOCK_DICT[key] = lock
+            if lock.acquire():
+                function(*args, **kwargs)
+        except:
+            raise
+        finally:
+            lock.release()
+    return run
+
+
+def thread_function(function):
+    """多线程路由函数独立锁（函数名作为唯一识别,保证函数线程安全）"""
+
+    @wraps(function)
+    def run(*args, **kwargs):
+        try:
+            t = MyThread(function, args=args, kwargs=kwargs)
+            t.start()
+        except:
+            raise
+    return run
+
 
 def myrequest(url, tip="GET", payload={}, headers={}):
     """构造请求"""
@@ -92,9 +151,43 @@ def get_dateobject(dtstr=None):
 def get_dateStr():
     return datetime.datetime.now().__str__()[0:19]
 
+
 def get_date_format(_format='%Y-%m-%d %H:%M:%S'):
     """ 返回时间字符串"""
     return str(datetime.datetime.now().strftime(_format))
+
+
+def get_num_by_string(Str):
+    p = re.compile(r'\d+')
+    num = "".join(p.findall(Str))
+    return num
+
+
+def changStr2Date(Str):
+    """日期字符串转时间对象"""
+    try:
+        num = get_num_by_string(Str)
+        redate = datetime.datetime.strptime(num, "%Y%m%d")
+    except:
+        redate = datetime.datetime.now().date()
+        logger.error(traceback.format_exc())
+    finally:
+        return redate
+
+
+def formate_date(mydate):
+    """把日期:2017-04-24 00:00:00字符串格式化为2017年4月11日 00:00:00"""
+    if not mydate or mydate == "":
+        return ""
+    t_str = str(mydate)[0:19]
+    d = datetime.datetime.strptime(t_str, '%Y-%m-%d %H:%M:%S')  # 字符串转日期
+    datastr = ""
+    datastr += str(d.year) + "年"
+    datastr += str(d.month) + "月"
+    datastr += str(d.day) + "日"
+    time = str(d.time())
+    return datastr + " " + time
+
 
 def file_name(path):
     """获取文件名,如test.doc,返回test"""
@@ -122,39 +215,43 @@ def mysecure_filename(filename):
 
     filename = '_'.join(filename.split()).strip('._')
     if os.name == 'nt' and filename and \
-                    filename.split('.')[0].upper() in _windows_device_files:
+            filename.split('.')[0].upper() in _windows_device_files:
         filename = '_' + filename
 
     return filename
 
 
-def set_mysqldefaultbytable(tablename, values):
+def set_mysqldefaultbytable(tablename, values, addPk=False):
     """初始化数据表
     @param tablename: 表名
     @param values: 默认值
-    @param player: player对象 
-    """
+    @param addPk: 是否需要生成主键,new时候需要生成主键 """
     from app.db.dbentrust.dbpool import dbpool
+    from app.db.dbadmin import get_sequence_val
     sql = "show columns from " + tablename
     updateMap = {}
     for ca in dbpool.querySql(sql, True):  # 初始化所有的列
+        val = values
         Field = str(ca['Field'])
         if Field == "UserId" and hasattr(current_user, "id"):
-            updateMap[Field] = current_user.Data['Id']
-        else:
-            updateMap[Field] = values
+            val = current_user.Data['Id']
+        if Field == "Id" and addPk:
+            val = long(get_sequence_val(tablename))
+        updateMap[Field] = val
     return updateMap
 
+
 def is_chinese(contents):
-    """判断是否仅为中文"""
+    """判断是否包含中文"""
     try:
-        for ca in contents:
-            if ca <= u"\u4e00" or ca >= u"\u9fa6":
-                return False
-        return True
+        for ch in contents.decode('utf-8'):
+            if u'\u4e00' <= ch <= u'\u9fff':
+                return True
+        return False
     except:
         return False
-    
+
+
 def myconstructor(f, isdocx=False):
     """处理长文本生成器"""
     from app.db.dbadmin import get_syscfg_val
@@ -164,20 +261,23 @@ def myconstructor(f, isdocx=False):
         if not paragraph:
             continue
         sceneheading = re.search('^\s*[0-9]+', paragraph)  # 匹配数字开头（场景）
-        dialog = paragraph.replace("：", ":").replace(" ","").split(":")
+        dialog = paragraph.replace("：", ":").replace(" ", "").split(":")
         if sceneheading:
             num = sceneheading.group()
             Strtxt = "<p class='sceneheading' data-input='%s'>%s</p>" % (num, paragraph)
-        elif dialog.__len__() > 1:  # 匹配冒号分隔（对话）  
+        elif dialog.__len__() > 1:  # 匹配冒号分隔（对话）
             character = str(dialog[0])  # 人物
             dialogcontent = "".join(dialog[1:])  # 对话内容
-            if is_chinese(character.decode("utf8")) and character.strip().decode("utf8").__len__().__str__() in get_syscfg_val(27).split("|"):  # 中文且长度在2~3个字符
-                Strtxt = "<p class='character'>%s</p><p class='dialog'>%s</p>" % (character,dialogcontent)
+            len_start = int(get_syscfg_val(27).split("|")[0])
+            len_end = int(get_syscfg_val(27).split("|")[1])
+            if is_chinese(character.decode("utf8")) and len_start <= character.strip().decode("utf8").__len__() <= len_end:  # 中文且长度在2~3个字符
+                Strtxt = "<p class='character'>%s</p><p class='dialog'>%s</p>" % (character, dialogcontent)
             else:
                 Strtxt = "<p class='action'>%s</p>" % paragraph
         else:
             Strtxt = "<p class='action'>%s</p>" % paragraph
         yield Strtxt
+
 
 def readDocx(docName, pagenum=0):
     """获取docx的文档中的所有文字,不管格式,暂不支持doc格式每line行
@@ -191,7 +291,7 @@ def readDocx(docName, pagenum=0):
     if extension == ".txt":
         with open(docName) as f:
             flist = list(myconstructor(f))
-            line = flist.__len__() -1  # 行数(多了一行---)
+            line = flist.__len__() - 1  # 行数(多了一行---)
             docText = ''.join(flist)  # 生成器迭代对象优化性能
             docText = docText.split("-----------------------")[0]  # 去掉页码控制符,下标为1时是页码数
     elif extension == ".docx":
@@ -202,22 +302,22 @@ def readDocx(docName, pagenum=0):
     else:
         docText = ""
     if pagenum != 0:
-        num = line / pagenum # 页数
+        num = line / pagenum  # 页数
         TotalPage = num if num > 0 else 1
     return docText, TotalPage
 
 
 def url_add_params(url, **params):
-    """ 在url中加入新参数 
+    """在url中加入新参数
     url_add_params(http://www.google.com, token=123, site="bbs")
-    return http://www.google.com?token=123&site=bbs
-    """
+    return http://www.google.com?token=123&site=bbs"""
     pr = urlparse.urlparse(url)
     query = dict(urlparse.parse_qsl(pr.query))
     query.update(params)
     prlist = list(pr)
     prlist[4] = urllib.urlencode(query)
     return urlparse.ParseResult(*prlist).geturl()
+
 
 def is_long(val):
     try:
@@ -226,21 +326,23 @@ def is_long(val):
     except:
         return False
 
+
 def is_float(val):
     try:
         float(val)
         return True
     except:
         return False
-    
+
+
 def isalpha(Str):
     """判断是否为字母"""
     return Str.isalpha()
 
+
 def isdigit(num):
     """判断是否为数字"""
     return num.isdigit()
-
 
 
 def expect_float(num, remainder, default=None):
@@ -264,6 +366,7 @@ def startswith(Str, startTuple):
     """
     return Str.startswith(startTuple)
 
+
 def endswith(Str, endTuple):
     """是否为startTuple字母开头
     @param Str: 源字符
@@ -271,13 +374,13 @@ def endswith(Str, endTuple):
     """
     return Str.endswith(endTuple)
 
+
 def myroute(f, url, g=login_required, needlogin=True, **kwargs):
     """必须登录的装饰器
     @parma f:蓝图的mod
     @parma url:路由url
     @parma g:login_required装饰器
-    @param needlogin: True时为需要登录(默认) 
-    """
+    @param needlogin: True时为需要登录(默认) """
     if needlogin:
         return lambda x: f.route(url, **kwargs)(g(x))
     else:
@@ -305,7 +408,8 @@ def endWith(*endstring):
 
     def run(s):
         f = map(s.endswith, ends)
-        if True in f: return s
+        if True in f:
+            return s
 
     return run
 
@@ -319,6 +423,15 @@ def processunicode(value):  # 定义一个处理unicode类型字符串的函数
     else:
         v1 = v1 + str(a)
     return v1
+
+
+def change_unicode_to_chinese_str(string):
+    try:
+        new_string = string.decode('unicode_escape').encode("utf-8")
+    except:
+        new_string = str(string)
+    finally:
+        return new_string
 
 
 def getCoding(strInput):
@@ -388,61 +501,6 @@ def save_db_from(db_name, data):
     return updateMap
 
 
-def parsed_dialogue(dlg, scene, shot_guid):
-    """解析并保存对话数据
-    """
-    from app.db import memmode
-    # 1-对话；2-独白
-    type = 1 if dlg == 'dh' else 2
-    db_dialogue = {}
-    dialogue_num = 0
-    for dialogue in scene.get(dlg, ''):  # 对话
-        db_dialogue['Id'] = long(dialogue.get('id', 0))
-        db_dialogue['Type'] = type  # 1-对话；2-独白
-        db_dialogue['Contents'] = dialogue.get('content', '')  # 内容（选中的内容）
-        db_dialogue['ShotGuid'] = shot_guid  # 镜头id
-        # dialogue_num += len(db_dialogue['Contents'])  # 字数
-
-        st_dialogueObj = memmode.st_dialogue.getObj(db_dialogue['Id'])
-        if st_dialogueObj:
-            st_dialogueObj.update_multi(db_dialogue)
-        else:
-            updateMap = save_db_from('st_dialogue', db_dialogue)
-            memmode.st_dialogue.new(updateMap, True)
-
-    # return dialogue_num
-
-
-def get_effectTable(scene_id, _id=[], all=False):
-    """ 特效
-    scene_id： 场次 id
-    """
-    from app.db import memmode, dbadmin
-    td = {}  # table body
-    th = []  # table header
-    effectpklist = memmode.st_effects.getAllPkByFk(scene_id)  # 获取所有的特效主键
-    effectsObjList = memmode.st_effects.getObjList(effectpklist)  # 获取场次下所有特效Obj
-
-    for cb in effectsObjList:
-        etype = cb.get("data")['EffectsTypeId']
-        eid = int(cb.get('data')['Id'])
-        if all is False and eid not in _id:
-            continue
-
-        if etype == 2:  # 角色
-            Name = cb.get("data")['Name']
-            th.append(Name)
-            td.setdefault(Name, set()).add(Name)  # 去重
-        else:
-            key = dbadmin.st_effectstype.get(etype).get('EName', '')  # EffectsType
-            value = cb.get('data').get('Name', '')
-            td.setdefault(key, set()).add(value)  # 去重
-            th.append(key)
-
-    td = {k: list(td.get(k)) for k, v in td.items()}  # 去重
-    return td, th
-
-
 def changeSqltupleByList(pklist):
     """
     @param pklist: 主键列表[5L,6L]
@@ -460,34 +518,6 @@ def changeSqlStrByList(pklist):
     @return: 5,6 如果传入列表为一个元素[5L],则返回5
     """
     return ",".join(map(str, pklist))
-
-
-def get_shotTable(cid):
-    from app.db import memmode, dbadmin
-    shotPklist = memmode.st_shot.getAllPkByFk(cid)
-    shotObjList = memmode.st_shot.getObjList(shotPklist)
-    cnt_list = []
-    id_list = []
-    for shot in shotObjList:
-        content = shot.get('data')['ShotContent']
-        shotid = shot.get('data')['Guid']
-        cnt_list.append(content)
-        id_list.append(shotid)
-    return cnt_list, id_list
-
-
-def get_dialogueTable(shotid, type):
-    from app.db import memmode, dbadmin
-    r = []
-    for id in shotid:
-        dialoguePklist = memmode.st_dialogue.getAllPkByFk(id)
-        dialogueObjList = memmode.st_dialogue.getObjList(dialoguePklist)
-        for shot in dialogueObjList:
-            if shot.get('data')['Type'] != type:
-                continue
-            content = shot.get('data')['Contents']
-            r.append(content)
-    return r
 
 
 def tree():
@@ -508,6 +538,15 @@ def sortedDictList(dict_list, dict_key, rev=False):
     @param rev:bool 是否倒序,Flase为升序,True为降序
     """
     return sorted(dict_list, key=itemgetter(dict_key), reverse=rev)
+
+
+def mysortedByKeyList(dict_list, dict_key, rev=False):
+    """列表字典按字典里面的列表key来排序
+    @param dict_list: list字典列表
+    @param dict_key: list字典排序的key列表(dict_list可不存在该key)
+    @param rev:bool 是否倒序,Flase为升序,True为降序"""
+    dict_list.sort(key=lambda x: tuple(x.get(ca) for ca in dict_key), reverse=rev)
+    return dict_list
 
 
 def minDictList(dict_list, dict_key):
@@ -542,31 +581,6 @@ def dictListGroupby(dict_list, dict_key, rev=False):
     return redata
 
 
-def dictListGroupby2(dict_list, dict_key, rev=False):
-    """按dict_key返回列表字典有序的分组字典,每组的key为dict_key
-    @param dict_list: list字典列表
-    @param dict_key: 分组的key
-    @param rev:bool 是否倒序,Flase为升序,True为降序
-    """
-    from app.db import memmode
-    redata = collections.OrderedDict()
-    dict_list.sort(key=itemgetter(dict_key), reverse=rev)
-    for key, items in groupby(dict_list, key=itemgetter(dict_key)):
-        redata[key] = []
-        SceneInfo = {}
-        SceneIdList = []
-        for i in items:
-            SceneId = i.get("SceneId")
-            if SceneId not in SceneIdList:
-                SceneIdList.append(SceneId)
-        SceneInfoObjList = memmode.st_scene.getObjList(SceneIdList)
-        Page = sum(float(ca.get('data')['Page']) for ca in SceneInfoObjList)
-        SceneInfo['Page'] = Page  # 页数
-        SceneInfo['SceneNum'] = len(SceneIdList)  # 场数        
-        redata[key].append(SceneInfo)
-    return redata
-
-
 def unicodeclean(ustr):
     """清除和音字符
     @param ustr: unicode编码字符,如:u'pýtĥöñ is awesome\n'
@@ -575,25 +589,47 @@ def unicodeclean(ustr):
     return unicodedata.normalize('NFD', ustr).encode('ascii', 'ignore').decode('ascii')
 
 
+@thread_lock
 def loggerJsonInfo(msg, Str="req:"):
     """打印json格式化的信息"""
     try:
-        logger.info(Str + json.dumps(msg))
+        if isinstance(msg, dict):
+            msg = json.dumps(msg)
+        logger.info(Str + msg)
     except:
         logger.error(traceback.format_exc())
 
 
-def str_limit(name, length=10):
+def getByteLength(Str):
+    """获取字节长度"""
+    Str = Str.decode("utf8")
+    length = len(Str)
+    utf8_length = len(Str.encode('utf-8'))
+    length = (utf8_length - length) / 2 + length
+    return length
+
+
+def cutByByteLength(Str, length):
+    """按字节截取长度"""
+    length = int(length)
+    s = slice(length)  # 长度切片对象
+    try:
+        Str = Str.encode('gbk')[s].decode('gbk')
+    except:
+        Str = Str[s]
+    return Str
+
+
+def str_limit(name, length=10, addStr="..."):
     """按字节长度切割字符长度
     @param name: str 需要切割的字符串(第一个参数作为传入值)
-    @param length: 需要切割的长度 
-    """
-    name = name.decode("utf-8")
-    s = slice(length)  # 长度切片对象
-    if len(name) <= length:
+    @param length: 需要切割的长度 """
+    length = int(length)
+    if getByteLength(name) <= length:
         redata = name
     else:
-        redata = name[s] + "..."
+        addStr = str(addStr)
+        redata = cutByByteLength(name, length) + addStr
     return redata
 
 
@@ -602,6 +638,12 @@ def getObjListByFk(memObj, fk):
     pklist = memObj.getAllPkByFk(fk)
     memObjList = memObj.getObjList(pklist)
     return memObjList
+
+
+def getDataListByFk(memObj, fk):
+    """根据外键获取主键Data列表"""
+    memObjList = getObjListByFk(memObj, fk)
+    return map(lambda x: x.get("data"), memObjList)
 
 
 def delectdatabyFk(memmodeObj, fk, isSyncNow=False):  # 删除缓存对象
@@ -647,7 +689,7 @@ def chang2txtbyantiword(fpath, tpath):
     wget http://www.winfield.demon.nl/linux/antiword-0.37.tar.gz
     tar -xvf antiword-0.37.tar.gz
     cd antiword-0.37
-    make && make install 
+    make && make install
     @param fp: 相对文件路径"""
     try:
         com = "antiword -m UTF-8.txt -w 0 -f " + fpath + " > " + tpath
@@ -686,6 +728,7 @@ def compareTimeByStr(timeSrt1, timeSrt2, formatType='%Y-%m-%d %H:%M:%S'):
         logger.error(traceback.format_exc())
         return False
 
+
 def formatNum(num, digit=0):
     """字符串格式化位数"""
     try:
@@ -693,29 +736,32 @@ def formatNum(num, digit=0):
         return ("%0" + str(digit) + "d") % num
     except:
         return num
-    
+
+
 def changBit2Int(num_2):
     """二进制转十进制"""
     try:
         return int("0b" + str(num_2), 2)  # 转为10进制
     except:
         return 0
-    
+
+
 def changInt2Bit(num, tip=16):
     """十进制转二进制,八进制,16进制"""
     try:
         num = int(num)
-        if tip==2:
+        if tip == 2:
             return bin(num)  # 十进制转二进制
-        if tip==8:
+        if tip == 8:
             return oct(num)  # 十进制转八进制
-        if tip==16:          
+        if tip == 16:
             return hex(num)  # 十进制转十六进制
         else:
             return num  # 十进制转十进制
     except:
         return 0
-    
+
+
 def getsqlsbylist(sqlList):
     """生成列表长度的sql的s个数"""
     try:
@@ -724,7 +770,6 @@ def getsqlsbylist(sqlList):
         return ""
     except:
         return ""
-
 
 
 def checklen(pwd, start=0, limit=6):
@@ -751,6 +796,7 @@ def checkSymbol(pwd):
     else:
         return False
 
+
 def checkOnlyNum(num):
     """
     校验字符串是否只包含数字
@@ -763,6 +809,7 @@ def checkOnlyNum(num):
         return True
     else:
         return False
+
 
 def valid_phone(phone_num):
     """
@@ -777,6 +824,7 @@ def valid_phone(phone_num):
     num_ok = checkOnlyNum(phone_num)
 
     return num_ok and len_ok
+
 
 def checkEmail(email):
     """
@@ -805,12 +853,14 @@ def checkOnlySymbol(pwd):
     else:
         return False
 
+
 def filegenerate(filename):
     """大文件生成二进制迭代器
     @param filename: 文件路径"""
     with open(filename, 'rb') as r:
         for line in r:
             yield line
+
 
 def getUploadFilePath(path=""):
     """获取上传的路径地址"""
@@ -820,19 +870,21 @@ def getUploadFilePath(path=""):
         os.makedirs(f_path)
     return f_path
 
+
 def clipimage(size):
     width = int(size[0])
     height = int(size[1])
     box = ()
     if (width > height):
         dx = width - height
-        box = (dx / 2, 0, height + dx / 2,  height)
+        box = (dx / 2, 0, height + dx / 2, height)
     else:
         dx = height - width
         box = (0, dx / 2, width, width + dx / 2)
     return box
 
-def compressPic(fp,width=500, height=500, addname="_thumb"):
+
+def compressPic(fp, width=500, height=500, addname=COMPRESSIONPICTURE):
     """裁剪为正方形"""
     im = Image.open(fp)
     box = clipimage(im.size)
@@ -840,17 +892,16 @@ def compressPic(fp,width=500, height=500, addname="_thumb"):
     size = (width, height)
     img.thumbnail(size, Image.ANTIALIAS)
     extension = os.path.splitext(fp)[1]
-    filename = fp.replace(extension,addname+extension).replace("\\","/")
+    filename = fp.replace(extension, addname + extension).replace("\\", "/")
     img.convert('RGB').save(filename, "JPEG")
     return filename
 
-def getUploadActorImgPath(extension, pname):
-    from app.share.constants import ACTORFPATH
-    dateStr = get_today_date()  # 日期
-    uuidfilename = str(uuid.uuid1()) + extension  # 随机文件
-    folder = os.path.join(ACTORFPATH, dateStr, pname)  # 上传文件保存路径
-    filepath = os.path.join(getUploadFilePath(folder), uuidfilename).replace("\\","/")
-    return filepath
+
+def get_compress_pic_name(fp):
+    extension = os.path.splitext(fp)[1]
+    filename = fp.replace(extension, COMPRESSIONPICTURE + extension).replace("\\", "/")
+    return filename
+
 
 def getClentRealIP():
     """获取客户端真实IP"""
@@ -865,14 +916,16 @@ def getClentRealIP():
     finally:
         logger.info(msg % ip)
         return ip
-        
+
+
 def CompressPic(filename, addname="_thumb"):
     """转换为压缩图"""
     tpath = filename
-    if addname not in filename:
-        extension = os.path.splitext(filename)[1]  # 文件拓展名
-        tpath = filename.replace(extension, addname+extension, 1)        
+    extension = os.path.splitext(filename)[1]  # 文件拓展名
+    if addname not in filename and extension in ALLOWED_EXTENPICSIONS:
+        tpath = filename.replace(extension, addname + extension, 1)
     return tpath
+
 
 def countage(dateStr):
     """计算年龄工具
@@ -903,6 +956,7 @@ def countage(dateStr):
         dy = dy - 1
     return dy
 
+
 def getStrOnly(Str):
     """仅仅获取字符(过滤特殊符号和html标签等)"""
     pattern = re.compile(r'\S')
@@ -912,3 +966,80 @@ def getStrOnly(Str):
     return str(soup.get_text())
 
 
+def downloadpdf(strhtml, cssfile, output, options=None):
+    """html转pdf
+    @param cssfile: 样式文件路径
+    @param output: 输出的文件完整路径"""
+    opt = {
+        'page-size': 'Letter',
+        # 'margin-top': '0.75in',
+        # 'margin-right': '0.75in',
+        # 'margin-bottom': '0.75in',
+        # 'margin-left': '0.75in',
+        'encoding': "UTF-8",
+        'no-outline': None,
+        'quiet': ''  # 不打印日志
+    }
+    if isinstance(options, dict):
+        opt.update(options)
+
+    myplatform = getplatform()
+    config = pdfkit.configuration(wkhtmltopdf=WkhtmltopdfPath) if 'Windows' in myplatform else None
+    pdfkit.from_string(strhtml, output, options=opt, css=cssfile, configuration=config)
+
+
+def downloadimg(strhtml, cssfile, output):
+    """html转图片
+    @param cssfile: 样式文件路径
+    @param output: 输出的文件完整路径"""
+    options = {
+        'format': 'png',
+        'encoding': "UTF-8",
+        'quiet': ''  # 不打印日志
+    }
+    myplatform = getplatform()
+    config = imgkit.config(wkhtmltoimage=WkhtmltoimgPath) if 'Windows' in myplatform else None
+    imgkit.from_string(strhtml, output, options=options, css=cssfile, config=config)
+
+
+def getDownloadPath(downtype):
+    FILE_PATH = os.path.join(DOWNLOAD_FOLDER, downtype, datetime.date.today().strftime('%Y%m%d'))
+    if not os.path.exists(FILE_PATH):
+        os.makedirs(FILE_PATH)
+    filename = str(uuid.uuid1()) + '.' + downtype
+    return os.path.join(FILE_PATH, filename)
+
+
+def changeImg2Pdf(f_jpg):
+    """图片转pdf生成不可修改的pdf"""
+    im = Image.open(f_jpg)
+    im_w, im_h = im.size
+    downtype = "pdf"
+    newname = getDownloadPath(downtype)
+    c = canvas.Canvas(newname, pagesize=(im_w, im_h))
+    c.drawImage(f_jpg, 0, 0, im_w, im_h)
+    c.save()
+    c.showPage()
+    return newname, downtype
+
+
+def floatAdd(num1, num2, precision=2):
+    """高精度相加"""
+    getcontext().prec = precision  # 设置精度
+    return Decimal(str(num1)) + Decimal(str(num2))
+
+
+def is_picture(imgdata):
+    """判断是否是被运行的图片类型
+    @param imgdata: 文件二进制对象"""
+    imgType = imghdr.what(imgdata)  # 文件真实类型
+    if imgType is None or imgType not in PICTURETYPE:
+        return False
+    return True
+
+
+def is_picture_by_name(file_name):
+    """判断是否是被运行的图片类型
+    @param file_name: 文件名字"""
+    extension = os.path.splitext(file_name)[1].replace(".", "", 1)   # 文件拓展名
+    return extension.lower() in PICTURETYPE

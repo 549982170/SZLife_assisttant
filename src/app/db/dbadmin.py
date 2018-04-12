@@ -11,7 +11,7 @@ from app.db.dbentrust.dbpool import dbpool
 logger = logging.getLogger('dblog')
 
 # ------------默认Id为主键的配置缓存表-------------------
-tb_syscfg = collections.OrderedDict()  # 系统配置表
+cf_syscfg = collections.OrderedDict()  # 系统配置表
 
 
 # ------------需要缓存的新表结束-------------------
@@ -30,8 +30,8 @@ def load_admin_data():
 
     logger.info('加载数据配置数据开始 ...')
     # ----------------加载配置库-----------------
-    sql = "SELECT * FROM tb_syscfg order by Id"
-    load_data(sql, tb_syscfg)  # 系统配置
+    sql = "SELECT * FROM cf_syscfg order by Id"
+    load_data(sql, cf_syscfg)  # 系统配置
 
     # ----------------加载配置库结束---------------
     logger.info('加载数据配置数据完毕 ...')
@@ -43,7 +43,7 @@ def get_syscfg_val(syscfg_id):
     @param syscfg_id:
     @return:
     """
-    ret = tb_syscfg.get(int(syscfg_id))
+    ret = cf_syscfg.get(int(syscfg_id))
     if ret is None:
         raise Exception('not syscfg id=%s' % syscfg_id)
     return str(ret['content'])

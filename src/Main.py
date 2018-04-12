@@ -17,11 +17,10 @@ from flask import Flask, session, request, redirect, g, render_template
 from flask_login import LoginManager, current_user
 from flask_wtf.csrf import CSRFProtect, CSRFError
 
-from app.db.dbadmin import load_admin_data
-from app.db.dbentrust.dbpool import dbpool
-from app.db.dbentrust.memclient import mclient
-from app.db.dbentrust.rdsclient import initRedis
+from app.db.connect import load_config_data
 from app.db.syncdata import timerGetData
+from app.handlers.core.usermanager import UserManager
+from app.handlers.core.user.userbase import UserHandle
 from app.models.adminuser import adminUser
 from app.models.guestuser import Anonymous
 from app.models.user import User
@@ -52,14 +51,9 @@ login_manager.anonymous_user = Anonymous
 # -------开启CSRF保护----------
 csrf = CSRFProtect()
 csrf.init_app(app)
-# ------dbpool连接------------
-dbpool.initPool(configfiles['db'])  # dbpool连接
-load_admin_data()  # 初始化配表到内存
-# ---------redis连接-----------
-initRedis(configfiles['redis']['host'], configfiles['redis']['port'], configfiles['redis']['password'],
-          configfiles['redis']['db'])
-# -------Memcache连接-----------
-mclient.connect(configfiles['memcached']['urls'], configfiles['memcached']['hostname'])  # memcache连接
+# ------连接数据库,装载内存------------
+load_config_data()
+# ------启动定时扫描------------
 timerGetData()
 # --------用户登录初始化--------
 # 连接缓存后导入用户类
@@ -123,6 +117,7 @@ def after_request(error):
 
 @login_manager.user_loader  # 重新装载user对象
 def load_user(userId):
+    userId = "1"  # 测试
     if not userId.isdigit():
         return None
     urlrootpath = request.path.split("/")[1]
@@ -130,7 +125,10 @@ def load_user(userId):
         user = adminUser(userId)
     else:
         user = User(userId)
-    return user if user.obj and user.IsDisabled == 0 else None  # 找不到改用户返回空
+        if not UserManager().getUserByID(userId):
+            userhandle = UserHandle(userId)
+            UserManager().addUser(userhandle)
+    return user if user.obj and user.IsCanLogin else None  # 找不到改用户返回空
 
 
 def testapp():

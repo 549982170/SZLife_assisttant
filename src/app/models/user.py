@@ -5,11 +5,12 @@ Created on 2017年2月14日
 @author: yizhiwu
 用户类
 '''
-import datetime
 import logging
-import traceback
 
 from flask_login import UserMixin
+
+from app.db.memmode import tb_users
+
 
 logger = logging.getLogger()
 
@@ -22,3 +23,12 @@ class User(UserMixin):
     @property
     def id(self):
         return self.uid
+
+    @property
+    def obj(self):
+        return tb_users.getObj(long(self.uid)) if tb_users.getObj(long(self.uid)) else {}
+
+    @property
+    def IsCanLogin(self):
+        """判断是否能登录"""
+        return True

@@ -5,7 +5,10 @@ Created on 2017年3月21日
 @author: yizhiwu
 错误异常类别
 '''
+
+
 class ApiException(Exception):
+
     def __init__(self, **kwargs):
         self.status = kwargs.get('status', 1)
         self.result = kwargs.get('result', 0)
