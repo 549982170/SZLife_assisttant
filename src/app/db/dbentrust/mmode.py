@@ -215,8 +215,8 @@ class MAdmin(MemObject):
         MemObject.__init__(self, name, mclient)
         self._pk = pk
         self._fk = kw.get('fk', '')
-        self._incrkey = kw.get('incrkey', '')
-        self._incrvalue = kw.get('incrvalue', 0)
+        self._incrkey = kw.get('incrkey', '')  # 当数据库主键为自增时,这里传入值为Id,自动补充id
+        self._incrvalue = kw.get('incrvalue', 0)  # 为0时Id自增
         self._timeout = timeout
 
     def insert(self):

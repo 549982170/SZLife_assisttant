@@ -13,11 +13,13 @@ from app.db import memmode
 
 
 class User(Component):
-    '''文件上传'''
+    '''人员模块'''
 
     def __init__(self, owner):
         Component.__init__(self, owner)
         self.obj = memmode.tb_users
 
     def test(self, Id):
-        return "test" + str(Id)
+        """测试跨模块"""
+        test_other = self.owner.uploadhandler.test()
+        return test_other + str(Id)

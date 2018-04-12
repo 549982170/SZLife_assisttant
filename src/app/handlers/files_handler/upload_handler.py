@@ -21,6 +21,9 @@ class Upload(Component):
     def __init__(self, owner):
         Component.__init__(self, owner)
 
+    def test(self):
+        return "test"
+
     def uploadPic(self, imgdata, filePath):
         """上传图片"""
         filename = mysecure_filename(imgdata.filename)
@@ -73,4 +76,3 @@ class Upload(Component):
         else:
             compress_path = files_path
         return compress_path
-
